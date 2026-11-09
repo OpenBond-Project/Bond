@@ -19,6 +19,10 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     private bool _isSavingProfile;
 
+    /// <summary>昵称默认只读展示，点旁边的编辑图标才进入输入态。</summary>
+    [ObservableProperty]
+    private bool _isNicknameEditing;
+
     [ObservableProperty]
     private string _profileHint = "";
 
@@ -44,6 +48,22 @@ public partial class SettingsPageViewModel
         SaveProfileCommand.NotifyCanExecuteChanged();
     }
 
+    [RelayCommand]
+    private void BeginEditNickname()
+    {
+        ProfileNickname = AccountName;
+        IsNicknameEditing = true;
+        SetProfileHint("", isError: false);
+    }
+
+    [RelayCommand]
+    private void CancelEditNickname()
+    {
+        ProfileNickname = AccountName;
+        IsNicknameEditing = false;
+        SetProfileHint("", isError: false);
+    }
+
     /// <summary>头像位图（由 store 下载后提供）；为空时界面用首字母占位。</summary>
     public Avalonia.Media.Imaging.Bitmap? AvatarSource => _session.AvatarSource as Avalonia.Media.Imaging.Bitmap;
 
@@ -65,6 +85,10 @@ public partial class SettingsPageViewModel
 
             if (string.IsNullOrWhiteSpace(EmailDisplay) || EmailDisplay == "—")
                 EmailDisplay = string.IsNullOrWhiteSpace(me.Data.Email) ? "未设置" : me.Data.Email!;
+
+            // 头像由 store 异步下载，资料刷新完成后再通知一次，避免首屏停在首字母占位。
+            OnPropertyChanged(nameof(AvatarSource));
+            OnPropertyChanged(nameof(HasAvatar));
         }
         catch (Exception ex)
         {
@@ -108,6 +132,7 @@ public partial class SettingsPageViewModel
 
             OnPropertyChanged(nameof(AccountName));
             OnPropertyChanged(nameof(AccountInitial));
+            IsNicknameEditing = false;
             SetProfileHint("昵称已保存", isError: false);
             _notify.Notify("昵称已更新", Bond.Services.NoticeKind.Success);
         }
@@ -271,9 +296,6 @@ public partial class SettingsPageViewModel
     private bool _isUploadingAvatar;
 
     [ObservableProperty]
-    private bool _hasAvatarConfirmOpen;
-
-    [ObservableProperty]
     private string _avatarHint = "";
 
     [ObservableProperty]
@@ -285,8 +307,6 @@ public partial class SettingsPageViewModel
     /// <summary>上一次头像操作的对象（本地文件路径），用于失败后的「重试」。</summary>
     private string? _lastAvatarPath;
 
-    private bool _lastAvatarWasRemove;
-
     public bool HasAvatarHint => !string.IsNullOrEmpty(AvatarHint);
 
     public bool CanEditAvatar => !IsUploadingAvatar;
@@ -297,7 +317,6 @@ public partial class SettingsPageViewModel
     {
         OnPropertyChanged(nameof(AvatarButtonText));
         OnPropertyChanged(nameof(CanEditAvatar));
-        RequestRemoveAvatarCommand.NotifyCanExecuteChanged();
     }
 
     private static string? ResolveAvatarContentType(string localPath)
@@ -362,7 +381,6 @@ public partial class SettingsPageViewModel
 
         IsUploadingAvatar = true;
         AvatarRetryVisible = false;
-        _lastAvatarWasRemove = false;
         _lastAvatarPath = localPath;
         SetAvatarHint("正在上传头像…", isError: false);
 
@@ -404,89 +422,13 @@ public partial class SettingsPageViewModel
         }
     }
 
-    /// <summary>「移除头像」第一步：打开内联二次确认。</summary>
-    [RelayCommand]
-    private void RequestRemoveAvatar()
-    {
-        if (IsUploadingAvatar || !HasAvatar) return;
-        SetAvatarHint("", isError: false);
-        HasAvatarConfirmOpen = true;
-    }
-
-    [RelayCommand]
-    private void CancelRemoveAvatar() => HasAvatarConfirmOpen = false;
-
-    [RelayCommand]
-    private async Task ConfirmRemoveAvatarAsync()
-    {
-        HasAvatarConfirmOpen = false;
-        await RemoveAvatarAsync();
-    }
-
-    /// <summary>失败后的「重试」：重跑上一次操作（不自动重试，符合 RetryPolicy.UserAction）。</summary>
+    /// <summary>失败后的「重试」：重跑上一次上传（不自动重试，符合 RetryPolicy.UserAction）。</summary>
     [RelayCommand]
     private async Task RetryAvatarAsync()
     {
         AvatarRetryVisible = false;
-        if (_lastAvatarWasRemove)
-        {
-            await RemoveAvatarAsync();
-            return;
-        }
-
         if (!string.IsNullOrEmpty(_lastAvatarPath))
             await UploadAvatarAsync(_lastAvatarPath!);
-    }
-
-    public async Task RemoveAvatarAsync()
-    {
-        if (IsUploadingAvatar || !HasAvatar) return;
-
-        IsUploadingAvatar = true;
-        _lastAvatarWasRemove = true;
-        SetAvatarHint("正在移除头像…", isError: false);
-
-        try
-        {
-            var status = await _api.DeleteAvatarAsync();
-            if (status < 0)
-            {
-                SetAvatarHint("无法连接服务器，请检查网络后重试", isError: true);
-                AvatarRetryVisible = true;
-                return;
-            }
-
-            if (status is not (200 or 204))
-            {
-                SetAvatarHint(
-                    status switch
-                    {
-                        401 => "登录状态已失效，请重新登录",
-                        403 => "没有权限执行该操作",
-                        _ => $"移除头像失败（HTTP {status}）",
-                    },
-                    isError: true);
-                AvatarRetryVisible = status >= 500;
-                return;
-            }
-
-            if (_session is Bond.Services.HttpBondStore store)
-                store.ClearAvatar();
-
-            RefreshAvatarBindings();
-            RefreshTopBarSession();
-            SetAvatarHint("头像已移除，已回退为首字母头像", isError: false);
-            _notify.Notify("头像已移除", Bond.Services.NoticeKind.Success);
-        }
-        catch (Exception ex)
-        {
-            SetAvatarHint("移除头像失败：" + ex.Message, isError: true);
-            AvatarRetryVisible = true;
-        }
-        finally
-        {
-            IsUploadingAvatar = false;
-        }
     }
 
     private void RefreshAvatarBindings()
@@ -534,5 +476,8 @@ public partial class SettingsPageViewModel
     {
         UiScaleIndex = Bond.App.ParseUiScaleIndex(_prefs.UiScale);
         ProfileNickname = _session.AccountName;
+        IsNicknameEditing = false;
+        OnPropertyChanged(nameof(AvatarSource));
+        OnPropertyChanged(nameof(HasAvatar));
     }
 }

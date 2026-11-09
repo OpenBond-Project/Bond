@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Input.Platform;
@@ -9,6 +11,7 @@ using Bond.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 
 namespace Bond.ViewModels;
 
@@ -23,6 +26,10 @@ public partial class SettingsPageViewModel
     /// <summary>挂载地址（个人空间 + 每个工作区）。</summary>
     [ObservableProperty]
     private IReadOnlyList<WebDavAddressItem> _davAddressRows = [];
+
+    /// <summary>当前选择要挂载的地址（个人空间或某个工作区）。</summary>
+    [ObservableProperty]
+    private WebDavAddressItem? _selectedDavAddress;
 
     /// <summary>未吊销的专用密码。</summary>
     [ObservableProperty]
@@ -54,6 +61,10 @@ public partial class SettingsPageViewModel
 
     [ObservableProperty]
     private bool _isDavRevokeConfirmOpen;
+
+    /// <summary>手动挂载步骤默认收起，避免把命令直接铺在界面上。</summary>
+    [ObservableProperty]
+    private bool _isDavAdvancedOpen;
 
     public string DavRevokeConfirmText => DavRevokePending is null
         ? "确认吊销这个专用密码？"
@@ -93,6 +104,18 @@ public partial class SettingsPageViewModel
     partial void OnDavNewPlaintextChanged(string? value)
         => OnPropertyChanged(nameof(HasDavPlaintext));
 
+    partial void OnDavAddressRowsChanged(IReadOnlyList<WebDavAddressItem> value)
+    {
+        if (value.Count == 0)
+        {
+            SelectedDavAddress = null;
+            return;
+        }
+
+        if (SelectedDavAddress is null || !value.Contains(SelectedDavAddress))
+            SelectedDavAddress = value[0];
+    }
+
     partial void OnDavErrorChanged(string? value)
         => OnPropertyChanged(nameof(HasDavError));
 
@@ -124,10 +147,13 @@ public partial class SettingsPageViewModel
                 }
             };
 
+            // 个人空间地址先落地：工作区接口慢/失败时，用户仍能选择并挂载。
+            DavAddressRows = addresses;
+
             try
             {
                 var workspaces = App.Services.GetRequiredService<IWorkspaceService>();
-                await workspaces.RefreshAsync().ConfigureAwait(true);
+                await workspaces.RefreshAsync().WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(true);
                 foreach (var w in workspaces.Workspaces)
                 {
                     addresses.Add(new WebDavAddressItem
@@ -137,32 +163,39 @@ public partial class SettingsPageViewModel
                         CopyCommand = CopyDavAddressCommand
                     });
                 }
+
+                DavAddressRows = addresses;
             }
             catch
             {
                 // 工作区拉不到不影响个人空间挂载地址
             }
 
-            var enabled = await DavService.ProbeWebDavAsync().ConfigureAwait(true);
-            var (items, error) = await DavService.GetWebDavPasswordsAsync().ConfigureAwait(true);
-
-            var passwords = new List<WebDavPasswordItem>();
-            if (items is not null)
+            try
             {
-                foreach (var item in items)
+                var enabled = await DavService.ProbeWebDavAsync().ConfigureAwait(true);
+                var (items, error) = await DavService.GetWebDavPasswordsAsync().ConfigureAwait(true);
+
+                var passwords = new List<WebDavPasswordItem>();
+                if (items is not null)
                 {
-                    item.RevokeCommand = RevokeDavPasswordCommand;
-                    passwords.Add(item);
+                    foreach (var item in items)
+                    {
+                        item.RevokeCommand = RevokeDavPasswordCommand;
+                        passwords.Add(item);
+                    }
                 }
+
+                DavPasswords = passwords;
+                IsDavEnabled = enabled;
+                DavError = error;
+                OnPropertyChanged(nameof(HasDavPasswords));
+                OnPropertyChanged(nameof(HasNoDavPasswords));
             }
-
-            DavAddressRows = addresses;
-            DavPasswords = passwords;
-
-            IsDavEnabled = enabled;
-            DavError = error;
-            OnPropertyChanged(nameof(HasDavPasswords));
-            OnPropertyChanged(nameof(HasNoDavPasswords));
+            catch (Exception ex)
+            {
+                DavError = ex.Message;
+            }
         }
         finally
         {
@@ -282,6 +315,154 @@ public partial class SettingsPageViewModel
                  + $"密码：{DavNewPlaintext}";
         await SetClipboardAsync(text).ConfigureAwait(true);
         _notify.Notify("地址、用户名、密码已复制（关闭面板后密码不可再查看）", NoticeKind.Success);
+    }
+
+    [RelayCommand]
+    private void ToggleDavAdvanced()
+        => IsDavAdvancedOpen = !IsDavAdvancedOpen;
+
+    /// <summary>
+    /// 一键把个人空间挂载成 Windows 网络驱动器。需要刚生成的专用密码明文；
+    /// 不把密码写进日志/配置，只通过 net.exe 的参数传入。
+    /// </summary>
+    [RelayCommand]
+    private async Task MountDavWindowsAsync()
+    {
+        var target = SelectedDavAddress ?? DavAddressRows.FirstOrDefault();
+        if (target is null)
+        {
+            _notify.Notify("没有可挂载的地址，请先刷新挂载信息", NoticeKind.Warning);
+            return;
+        }
+
+        // 一键挂载：没有现成明文密码时自动生成一个专用密码，用户不需要先手动生成。
+        var password = DavNewPlaintext;
+        if (string.IsNullOrEmpty(password))
+        {
+            var (created, item, error) = await DavService.CreateWebDavPasswordAsync("一键挂载").ConfigureAwait(true);
+            if (created is null || item is null)
+            {
+                _notify.Notify(error ?? "自动生成专用密码失败", NoticeKind.Error);
+                return;
+            }
+
+            password = created;
+            DavNewPlaintext = created;
+            item.RevokeCommand = RevokeDavPasswordCommand;
+            var next = new List<WebDavPasswordItem> { item };
+            next.AddRange(DavPasswords);
+            DavPasswords = next;
+            OnPropertyChanged(nameof(HasDavPasswords));
+            OnPropertyChanged(nameof(HasNoDavPasswords));
+        }
+
+        string unc;
+        try
+        {
+            var uri = new Uri(target.Url);
+            var path = uri.AbsolutePath.Trim('/').Replace('/', '\\');
+            unc = $@"\\{uri.Host}@SSL" + (string.IsNullOrEmpty(path) ? string.Empty : "\\" + path);
+        }
+        catch
+        {
+            _notify.Notify("挂载地址无效，无法挂载", NoticeKind.Error);
+            return;
+        }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = Path.Combine(Environment.SystemDirectory, "net.exe"),
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        psi.ArgumentList.Add("use");
+        psi.ArgumentList.Add("*");
+        psi.ArgumentList.Add(unc);
+        psi.ArgumentList.Add($"/user:{_session.AccountName}");
+        psi.ArgumentList.Add(password);
+        psi.ArgumentList.Add("/persistent:no");
+
+        try
+        {
+            using var process = Process.Start(psi);
+            if (process is null)
+            {
+                _notify.Notify("无法启动系统挂载命令", NoticeKind.Error);
+                return;
+            }
+
+            var stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(true);
+            var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(true);
+            await process.WaitForExitAsync().ConfigureAwait(true);
+
+            if (process.ExitCode == 0)
+            {
+                TrySetDriveLabel(unc, target.Title);
+                _notify.Notify($"已挂载「{target.Title}」到「此电脑」，可在资源管理器中打开", NoticeKind.Success);
+                return;
+            }
+
+            var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+            detail = detail.Trim();
+            if (detail.Contains("67", StringComparison.Ordinal) ||
+                detail.Contains("WebClient", StringComparison.OrdinalIgnoreCase))
+            {
+                _notify.Notify("挂载失败：WebClient 服务未启动，请点「启用 WebClient」后重试", NoticeKind.Error);
+                return;
+            }
+
+            _notify.Notify($"挂载失败：{(string.IsNullOrEmpty(detail) ? "系统返回未知错误" : detail)}",
+                NoticeKind.Error);
+        }
+        catch (Exception ex)
+        {
+            _notify.Notify($"挂载失败：{ex.Message}", NoticeKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// 把映射盘的显示名改成用户可读的名称（工作区名 / 个人空间）。
+    /// WebDAV 服务端路径必须带 workspaceId，但资源管理器显示名可以单独设置。
+    /// </summary>
+    private static void TrySetDriveLabel(string unc, string label)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            var keyName = "##" + unc.TrimStart('\\').Replace('\\', '#');
+            using var key = Registry.CurrentUser.CreateSubKey(
+                $@"Software\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2\{keyName}");
+            key?.SetValue("_LabelFromReg", label);
+        }
+        catch
+        {
+            // 显示名只是锦上添花，失败不影响挂载本身。
+        }
+    }
+
+    /// <summary>WebDAV 重定向器依赖 WebClient 服务；启用需要管理员权限。</summary>
+    [RelayCommand]
+    private void EnableWebClient()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = true,
+                Verb = "runas",
+                Arguments = "-NoProfile -Command \"Set-Service WebClient -StartupType Automatic; Start-Service WebClient\""
+            };
+            Process.Start(psi);
+            _notify.Notify("已请求管理员权限启用 WebClient；完成后请重新点「一键挂载」", NoticeKind.Success);
+        }
+        catch
+        {
+            _notify.Notify("未获得管理员权限，WebClient 未启用", NoticeKind.Warning);
+        }
     }
 
     [RelayCommand]

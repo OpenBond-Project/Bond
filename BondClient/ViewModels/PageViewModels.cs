@@ -3992,7 +3992,6 @@ public partial class SettingsPageViewModel : ObservableObject
         _prefs = LocalPrefs.Current;
 
         _deviceName = session.DeviceName;
-        _serverUrl = api.BaseUrl;
         _downloadDirectory = _prefs.DownloadDirectory;
         _notifyOnTransfer = _prefs.NotifyOnTransfer;
         _startWithWindows = _prefs.StartWithWindows;
@@ -4007,8 +4006,7 @@ public partial class SettingsPageViewModel : ObservableObject
         };
 
         // 设置页常驻内存：登录态就绪后再拉「挂载网络硬盘」信息（未登录时等 session.Changed，避免 401/误判未开启）
-        if (_session.IsSignedIn) _ = LoadDavSectionAsync();
-        else _session.Changed += (_, _) => _ = LoadDavSectionAsync();
+        _session.Changed += (_, _) => _ = LoadDavSectionAsync();
     }
 
     [ObservableProperty]
@@ -4027,10 +4025,6 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     private bool _isDarkTheme = App.IsDarkTheme;
 
-    /// <summary>服务端地址：可查看、修改并重连。</summary>
-    [ObservableProperty]
-    private string _serverUrl;
-
     [ObservableProperty]
     private string _downloadDirectory;
 
@@ -4043,8 +4037,6 @@ public partial class SettingsPageViewModel : ObservableObject
     public string AccountInitial => string.IsNullOrEmpty(_session.AccountName)
         ? "?"
         : _session.AccountName[..1].ToUpperInvariant();
-
-    public string ServerHint => $"当前连接：{_api.BaseUrl}";
 
     public string AboutText =>
         "Bond 2.0（重构分支）\n"
@@ -4082,31 +4074,6 @@ public partial class SettingsPageViewModel : ObservableObject
 
         await Task.Delay(60).ConfigureAwait(true);
         _notify.Notify("设置已保存", NoticeKind.Success);
-    }
-
-    [RelayCommand]
-    private async Task ReconnectAsync()
-    {
-        var url = (ServerUrl ?? string.Empty).Trim();
-        if (!_api.ReconfigureBaseUrl(url))
-        {
-            _notify.Notify(
-                string.Equals(url.TrimEnd('/'), _api.BaseUrl, StringComparison.OrdinalIgnoreCase)
-                    ? "服务器地址未变化"
-                    : "地址无效：需要以 http:// 或 https:// 开头的完整地址",
-                NoticeKind.Warning);
-            return;
-        }
-
-        _prefs.ServerUrl = _api.BaseUrl;
-        _prefs.Save();
-
-        // 旧 token 属于旧服务器，切换后必须重新登录。
-        _api.ClearTokens();
-        ServerUrl = _api.BaseUrl;
-        OnPropertyChanged(nameof(ServerHint));
-        _notify.Notify($"已切换到 {_api.BaseUrl}，请重新登录", NoticeKind.Success);
-        (App.Current as App)?.ReturnToLogin();
     }
 
     [RelayCommand]

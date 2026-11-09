@@ -745,8 +745,22 @@ public partial class MainWindow : SukiWindow, IMainHost
         }
     }
 
-    /// <summary>文档页（侧栏「笔记」）在菜单里的位置：文件/工作区/传输/设备/会话/笔记/设置。</summary>
-    private const int DocsNavIndex = 5;
+    /// <summary>文档页（侧栏「笔记」）在菜单里的位置：文件/工作区/传输/设备/会话/分享/笔记/我的/设置。</summary>
+    private const int DocsNavIndex = 6;
+
+    /// <summary>
+    /// 从「我的」页快捷入口跳到设置页的指定分组。
+    /// <para>设置页始终是侧栏最后一项；先切页，等布局完成后再滚动到锚点。</para>
+    /// </summary>
+    public void OpenSettingsSection(string section)
+    {
+        if (SideMenu.Items.Count == 0) return;
+
+        SideMenu.SelectedItem = SideMenu.Items[^1];
+        Dispatcher.UIThread.Post(
+            () => SettingsPageView.NavigateToSection(section),
+            DispatcherPriority.Loaded);
+    }
 
     private async void FlushDocs()
     {

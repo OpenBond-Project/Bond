@@ -25,7 +25,8 @@
                  CanMove="True"
                  TitleFontSize="15"
                  TitleFontWeight="SemiBold"
-                 ShowBottomBorder="False">
+                 ShowBottomBorder="False"
+                 UseLayoutRounding="True">
 
     <suki:SukiWindow.LogoContent>
         <Image Source="avares://Bond/Assets/logo.png" Width="24" Height="24" />
@@ -232,6 +233,18 @@
             </suki:SukiSideMenuItem.PageContent>
         </suki:SukiSideMenuItem>
 
+        <!-- 2026-11-09：个人资料从设置页迁出，独立成「我的」页；设置仍保持最后一项。 -->
+        <suki:SukiSideMenuItem Header="我的"
+                               HorizontalAlignment="Stretch"
+                               Background="Transparent" PointerPressed="OnSidebarItemPressed">
+            <suki:SukiSideMenuItem.Icon>
+                <mi:MaterialIcon Kind="AccountCircle" IconSize="17" />
+            </suki:SukiSideMenuItem.Icon>
+            <suki:SukiSideMenuItem.PageContent>
+                <pages:MyPage x:Name="MyPageView" DataContext="{Binding Settings}" />
+            </suki:SukiSideMenuItem.PageContent>
+        </suki:SukiSideMenuItem>
+
         <suki:SukiSideMenuItem Header="设置"
                                HorizontalAlignment="Stretch"
                                Background="Transparent" PointerPressed="OnSidebarItemPressed">
@@ -239,7 +252,7 @@
                 <mi:MaterialIcon Kind="Cog" IconSize="17" />
             </suki:SukiSideMenuItem.Icon>
             <suki:SukiSideMenuItem.PageContent>
-                <pages:SettingsPage DataContext="{Binding Settings}" />
+                <pages:SettingsPage x:Name="SettingsPageView" DataContext="{Binding Settings}" />
             </suki:SukiSideMenuItem.PageContent>
         </suki:SukiSideMenuItem>
 

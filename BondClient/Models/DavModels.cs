@@ -47,4 +47,7 @@ public sealed class WebDavAddressItem
 
     /// <summary>该地址对应的角色说明（个人空间 / 工作区名）。</summary>
     public string KindText => IsPersonal ? "个人空间" : "工作区";
+
+    /// <summary>ComboBox 收起时显示当前挂载目标。</summary>
+    public override string ToString() => Title;
 }

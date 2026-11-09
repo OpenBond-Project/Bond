@@ -1,0 +1,157 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:Bond.ViewModels"
+             xmlns:settings="using:Bond.Views.Pages.Settings"
+             x:Class="Bond.Views.Pages.MyPage"
+             x:DataType="vm:SettingsPageViewModel"
+             UseLayoutRounding="True">
+
+    <UserControl.Styles>
+        <!-- 快捷入口：整行可点，内容左对齐；不引入额外阴影/模糊，避免滚动时重复合成。 -->
+        <Style Selector="Button.myaction">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="MinHeight" Value="64" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{DynamicResource BondSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BondBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Button.myaction:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BondSurfaceAlt}" />
+        </Style>
+        <Style Selector="Border.mystat">
+            <Setter Property="Background" Value="{DynamicResource BondSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BondBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="16,14" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid MaxWidth="1040" Margin="24,18,24,24" HorizontalAlignment="Center"
+              RowDefinitions="Auto,Auto,Auto,Auto" UseLayoutRounding="True">
+
+            <StackPanel Grid.Row="0" Spacing="3">
+                <TextBlock Classes="h1" Text="我的" />
+            </StackPanel>
+
+            <!-- 个人资料：头像 / 昵称 / 邮箱 / 会员标识 -->
+            <settings:ProfileSection Grid.Row="1" Margin="0,16,0,0" />
+
+            <!-- 概览：存储、会员、设备码 -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,*" Margin="0,14,0,0">
+                <Border Classes="mystat" Margin="0,0,10,0">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="meta" Text="存储空间" />
+                        <TextBlock Text="{Binding PlanStorageText}" FontSize="16" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Classes="mystat" Margin="0,0,10,0">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="meta" Text="会员状态" />
+                        <TextBlock Text="{Binding PlanNameText}" FontSize="16" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="meta" Text="{Binding PlanExpiryText}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Classes="mystat">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="meta" Text="设备码" />
+                            <TextBlock Text="{Binding DeviceCode}" FontSize="14" FontWeight="SemiBold"
+                                       Classes="settingsmono" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="ghosticon" Padding="8,5" MinHeight="30"
+                                VerticalAlignment="Center" Click="OnCopyDeviceCodeClick"
+                                ToolTip.Tip="复制设备码" AutomationProperties.Name="复制设备码">
+                            <mi:MaterialIcon Kind="ContentCopy" IconSize="14" />
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 常用入口：跳转到设置页对应分组 -->
+            <StackPanel Grid.Row="3" Spacing="10" Margin="0,18,0,0">
+                <TextBlock Classes="h2" Text="常用入口" />
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                    <Button Classes="myaction" Margin="0,0,10,10" Click="OnOpenAccountSettings"
+                            AutomationProperties.Name="账户与安全">
+                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <Border Width="34" Height="34" CornerRadius="10"
+                                    Background="{DynamicResource BondAccentSoft}">
+                                <mi:MaterialIcon Kind="ShieldAccountOutline" IconSize="18"
+                                                 Foreground="{DynamicResource BondAccent}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="账户与安全" FontSize="13" FontWeight="Medium" />
+                            </StackPanel>
+                            <mi:MaterialIcon Grid.Column="2" Kind="ChevronRight" IconSize="16"
+                                             Foreground="{DynamicResource BondStroke}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+
+                    <Button Grid.Column="1" Classes="myaction" Margin="0,0,0,10" Click="OnOpenRedeemSettings"
+                            AutomationProperties.Name="会员与兑换">
+                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <Border Width="34" Height="34" CornerRadius="10"
+                                    Background="{DynamicResource BondAccentSoft}">
+                                <mi:MaterialIcon Kind="TicketPercentOutline" IconSize="18"
+                                                 Foreground="{DynamicResource BondAccent}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="会员与兑换" FontSize="13" FontWeight="Medium" />
+                            </StackPanel>
+                            <mi:MaterialIcon Grid.Column="2" Kind="ChevronRight" IconSize="16"
+                                             Foreground="{DynamicResource BondStroke}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+
+                    <Button Grid.Row="1" Classes="myaction" Margin="0,0,10,0" Click="OnOpenAppearanceSettings"
+                            AutomationProperties.Name="外观">
+                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <Border Width="34" Height="34" CornerRadius="10"
+                                    Background="{DynamicResource BondAccentSoft}">
+                                <mi:MaterialIcon Kind="PaletteOutline" IconSize="18"
+                                                 Foreground="{DynamicResource BondAccent}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="外观" FontSize="13" FontWeight="Medium" />
+                            </StackPanel>
+                            <mi:MaterialIcon Grid.Column="2" Kind="ChevronRight" IconSize="16"
+                                             Foreground="{DynamicResource BondStroke}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+
+                    <Button Grid.Row="1" Grid.Column="1" Classes="myaction" Click="OnOpenAboutSettings"
+                            AutomationProperties.Name="关于与更新">
+                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <Border Width="34" Height="34" CornerRadius="10"
+                                    Background="{DynamicResource BondAccentSoft}">
+                                <mi:MaterialIcon Kind="InformationOutline" IconSize="18"
+                                                 Foreground="{DynamicResource BondAccent}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="关于与更新" FontSize="13" FontWeight="Medium" />
+                            </StackPanel>
+                            <mi:MaterialIcon Grid.Column="2" Kind="ChevronRight" IconSize="16"
+                                             Foreground="{DynamicResource BondStroke}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

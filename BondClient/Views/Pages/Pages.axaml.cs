@@ -1392,8 +1392,8 @@ public partial class ChatPage : UserControl
 public partial class SettingsPage : UserControl
 {
     // task-142 rev2：设置页 = 单页长滚动 + 锚点导航；窄窗时导航折叠为顶部横向 chip。
-    // task-154：内容区宽度断点沿用 1020（主窗 MinWidth=1040，窄布局在最小窗口下才可达）。
-    private const double NarrowBreakpoint = 1020;
+    // 2026-11-09：断点从 1020 降到 900，让当前 1702 宽窗口使用左侧竖排导航；更窄时才折叠为顶部 chip。
+    private const double NarrowBreakpoint = 900;
     private const double AnchorPadding = 24;
 
     private readonly Control[] _groups;
@@ -1415,8 +1415,8 @@ public partial class SettingsPage : UserControl
     {
         InitializeComponent();
 
-        _groups = new Control[] { GroupProfile, Group0, GroupRedeem, Group1, Group2, Group3, Group4 };
-        _navs = new[] { NavProfile, NavAccount, NavRedeem, NavAppearance, NavTransfer, NavNetwork, NavAbout };
+        _groups = new Control[] { Group0, GroupRedeem, Group1, Group2, Group3, Group4 };
+        _navs = new[] { NavAccount, NavRedeem, NavAppearance, NavTransfer, NavNetwork, NavAbout };
 
         _spyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _spyTimer.Tick += (_, _) =>
@@ -1449,6 +1449,26 @@ public partial class SettingsPage : UserControl
 
         // task-142：宽度变化只切换导航形态（纯布局，不重建视图、不触发布局循环）
         SizeChanged += (_, _) => ApplyNavLayout(Bounds.Width);
+    }
+
+    /// <summary>
+    /// 供「我的」页快捷入口调用：切到设置页后滚动到指定分组。
+    /// 未知 key 回退到第一组，避免调用方拼错时页面停在随机位置。
+    /// </summary>
+    public void NavigateToSection(string section)
+    {
+        var index = section switch
+        {
+            "account" => 0,
+            "redeem" => 1,
+            "appearance" => 2,
+            "transfer" => 3,
+            "network" => 4,
+            "about" => 5,
+            _ => 0,
+        };
+
+        ActivateNav(index);
     }
 
     /// <summary>task-142 rev2：点击锚点导航，滚到对应分组（200ms 缓动，顶部留 24px）。</summary>

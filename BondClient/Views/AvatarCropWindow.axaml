@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Bond.Views.AvatarCropWindow"
+        Title="裁切头像"
+        Width="520" Height="640"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BondSurface}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="22,18,22,18">
+        <StackPanel Grid.Row="0" Spacing="3">
+            <TextBlock Classes="h2" Text="裁切头像" />
+            <TextBlock Classes="meta" Text="拖动图片调整位置，滚轮或滑块缩放；圆形区域内的内容会作为新头像。" />
+        </StackPanel>
+
+        <Border x:Name="ViewportBorder" Grid.Row="1"
+                Width="360" Height="360"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#12000000"
+                BorderBrush="{DynamicResource BondBorder}" BorderThickness="1"
+                CornerRadius="12" ClipToBounds="True"
+                PointerPressed="OnViewportPointerPressed"
+                PointerMoved="OnViewportPointerMoved"
+                PointerReleased="OnViewportPointerReleased"
+                PointerWheelChanged="OnViewportWheelChanged">
+            <Panel>
+                <Canvas x:Name="ViewportCanvas" Width="360" Height="360" ClipToBounds="True">
+                    <Image x:Name="PreviewImage" Stretch="Fill" />
+                </Canvas>
+                <!-- 圆形裁切框：只做视觉提示，不拦截指针 -->
+                <Border Width="300" Height="300" CornerRadius="150"
+                        BorderBrush="White" BorderThickness="2"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsHitTestVisible="False" />
+                <Border Width="300" Height="300" CornerRadius="150"
+                        BorderBrush="#66000000" BorderThickness="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsHitTestVisible="False" />
+            </Panel>
+        </Border>
+
+        <StackPanel Grid.Row="2" Spacing="12" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                <TextBlock Text="缩放" FontSize="12.5" VerticalAlignment="Center" />
+                <Slider x:Name="ZoomSlider" Grid.Column="1" Margin="12,0"
+                        Minimum="1" Maximum="3" Value="1"
+                        ValueChanged="OnZoomChanged" />
+                <TextBlock x:Name="ZoomText" Grid.Column="2" Text="100%" FontSize="12"
+                           Foreground="{DynamicResource BondSecondary}" VerticalAlignment="Center" />
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Classes="soft" MinWidth="88" Content="取消" Click="OnCancelClick" />
+                <Button Classes="primary" MinWidth="88" Content="应用" Click="OnConfirmClick" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

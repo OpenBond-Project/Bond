@@ -52,6 +52,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         // 传输页常驻单例：它刷新时同步计数，侧栏徽标不依赖是否打开过传输页
         transfers.PropertyChanged += OnTransfersPropertyChanged;
+
+        // 头像/昵称是异步加载的：会话变化后同步刷新顶栏账户区，避免一直显示首字母。
+        session.Changed += (_, _) => RefreshSession();
     }
 
     private void OnTransfersPropertyChanged(object? sender, PropertyChangedEventArgs e)
