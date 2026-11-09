@@ -36,6 +36,30 @@
         <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
+    <!--
+        2026-11-09：SukiUI 的 ComboBox 模板默认在右侧画「上+下」双箭头
+        （Path Data="M7,15 L12,20 L17,15 M7,9 L12,4 L17,9"），
+        用户反馈所有下拉框都像有两个箭头。模板里的 Path 是局部值，普通 Style Setter
+        覆盖不了，所以直接替换 ToggleButton 的模板，只画一个下箭头。
+    -->
+    <Style Selector="ComboBox /template/ ToggleButton#toggle">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                    <Viewbox Width="12" Height="12">
+                        <Panel Width="24" Height="24">
+                            <Path Data="M7,9 L12,14 L17,9"
+                                  Stroke="{DynamicResource SukiLowText}"
+                                  StrokeThickness="2"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round" />
+                        </Panel>
+                    </Viewbox>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="TextBlock.h1">
         <Setter Property="FontSize" Value="21" />
         <Setter Property="FontWeight" Value="SemiBold" />
