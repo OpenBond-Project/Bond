@@ -72,17 +72,21 @@
         <div class="search-group">
           <a-input
             v-model:value="keyword"
-            placeholder="搜索用户名 / 昵称"
-            aria-label="按用户名或昵称搜索用户"
+            placeholder="搜索用户名 / 昵称 / 用户 ID"
+            aria-label="按用户名、昵称或用户 ID 搜索用户"
             allow-clear
             style="width: 320px"
             @press-enter="onSearch"
           >
-            <template #suffix><SearchOutlined /></template>
+            <template #prefix><SearchOutlined /></template>
           </a-input>
-          <a-button aria-label="搜索用户" :loading="loading" @click="onSearch">
-            <template #icon><SearchOutlined /></template>
-          </a-button>
+          <a-select
+            v-model:value="statusFilter"
+            style="width: 132px"
+            :options="statusOptions"
+            aria-label="按账号状态筛选"
+            @change="onStatusChange"
+          />
         </div>
         <span class="grow" />
         <span class="muted small">共 {{ stats.total }} 个用户 · 第 {{ page }} 页</span>
@@ -605,7 +609,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   CheckCircleOutlined, CrownOutlined, DeleteOutlined, DownOutlined, GiftOutlined,
@@ -661,6 +665,16 @@ const stats = ref({ total: 0, active: 0, disabled: 0, admin: 0 })
 const page = ref(1)
 const pageSize = ref(20)
 const keyword = ref('')
+/** 账号状态筛选：'all' 全部 / '1' 正常 / '0' 已禁用（字符串便于 a-select 绑定） */
+const statusFilter = ref<'all' | '1' | '0'>('all')
+const statusOptions = [
+  { label: '全部状态', value: 'all' },
+  { label: '正常', value: '1' },
+  { label: '已禁用', value: '0' }
+]
+
+/** 'all' → undefined（不传 status），否则转成数字给后端 */
+const statusParam = computed(() => (statusFilter.value === 'all' ? undefined : Number(statusFilter.value)))
 const busyId = ref<string | null>(null)
 
 /** 邮箱接口是否上线：以后端响应里是否出现 email 字段为准（未上线时字段缺省） */
@@ -812,8 +826,53 @@ async function loadStats() {
 async function load() {
   loading.value = true
   loadError.value = ''
+  const kw = keyword.value.trim()
   try {
-    const res = await adminApi.listUsers({ page: page.value, size: pageSize.value, keyword: keyword.value.trim() || undefined })
+    // 纯数字关键词 = 按用户 ID 查。
+    // 1) 先走详情接口 GET /admin/users/{id}：完整 ID 一次命中，最快；
+    // 2) 没命中再按 ID 片段模糊搜：线上后端还没部署「列表按 ID 匹配」的改动，
+    //    这里退化为「翻页扫描 + 本地过滤」，最多扫 MAX_ID_SCAN_PAGES 页，避免拖慢后台。
+    if (/^\d+$/.test(kw)) {
+      // 1) 完整 ID：详情接口一次命中，最快
+      try {
+        const detail = await adminApi.getUserDetail(kw)
+        if (detail.code === 200 && detail.data) {
+          items.value = [detail.data]
+          detectEmailSupport()
+          return
+        }
+      } catch {
+        // 404 / 网络错误：继续下一步
+      }
+
+      // 2) 列表查询：后端部署「按 ID 模糊匹配」后，这一步就能直接返回片段命中
+      const byKeyword = await adminApi.listUsers({
+        page: 1,
+        size: pageSize.value,
+        keyword: kw,
+        status: statusParam.value
+      })
+      if (byKeyword.code === 200 && (byKeyword.data?.length ?? 0) > 0) {
+        items.value = byKeyword.data || []
+        detectEmailSupport()
+        return
+      }
+
+      // 3) 兜底：后端还没部署时，翻页扫描 + 本地按 ID 片段过滤
+      const scanned = await scanUsersByIdFragment(kw)
+      items.value = scanned.items
+      detectEmailSupport()
+      if (scanned.truncated && scanned.items.length === 0) {
+        message.info(`已扫描前 ${MAX_ID_SCAN_PAGES * ID_SCAN_PAGE_SIZE} 个用户，没有匹配的 ID 片段`)
+      }
+      return
+    }
+    const res = await adminApi.listUsers({
+      page: page.value,
+      size: pageSize.value,
+      keyword: kw || undefined,
+      status: statusParam.value
+    })
     if (res.code === 200) {
       items.value = res.data || []
       detectEmailSupport()
@@ -827,6 +886,31 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+/** ID 片段模糊搜索的扫描上限：每页 100 条，最多 10 页（1000 个用户） */
+const ID_SCAN_PAGE_SIZE = 100
+const MAX_ID_SCAN_PAGES = 10
+
+/**
+ * 按用户 ID 片段模糊搜索（前端兜底）。
+ *
+ * <p>后端 {@code GET /admin/users?keyword=} 目前只匹配用户名/昵称，ID 模糊匹配的 SQL 改动
+ * 还没部署；这里翻页拉取用户列表并在本地按 {@code id.includes(fragment)} 过滤，
+ * 命中即返回。扫描到最后一页（不满 100 条）或达到页数上限即停止。</p>
+ */
+async function scanUsersByIdFragment(fragment: string): Promise<{ items: AdminUser[]; truncated: boolean }> {
+  const matched: AdminUser[] = []
+  for (let p = 1; p <= MAX_ID_SCAN_PAGES; p++) {
+    const res = await adminApi.listUsers({ page: p, size: ID_SCAN_PAGE_SIZE, status: statusParam.value })
+    if (res.code !== 200) break
+    const rows = res.data || []
+    matched.push(...rows.filter((u) => String(u.id).includes(fragment)))
+    if (rows.length < ID_SCAN_PAGE_SIZE) {
+      return { items: matched, truncated: false }
+    }
+  }
+  return { items: matched, truncated: true }
 }
 
 function detectEmailSupport() {
@@ -843,6 +927,28 @@ function onSearch() {
   page.value = 1
   load()
 }
+
+/** 状态筛选变化：回到第 1 页重新查 */
+function onStatusChange() {
+  page.value = 1
+  load()
+}
+
+/**
+ * 输入即搜（300ms 防抖）：和工作区页一致，去掉搜索按钮后不用再按回车。
+ * 回车仍然立即触发（@press-enter），防抖只负责「打完字停一下就查」。
+ */
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+watch(keyword, () => {
+  if (keywordTimer) clearTimeout(keywordTimer)
+  keywordTimer = setTimeout(() => {
+    keywordTimer = null
+    onSearch()
+  }, 300)
+})
+onUnmounted(() => {
+  if (keywordTimer) clearTimeout(keywordTimer)
+})
 
 function onPageChange(p: number) {
   page.value = p

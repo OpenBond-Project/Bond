@@ -16,8 +16,8 @@ import type { AdminShareItem, ApiResult, PageResult } from '../types'
 export interface ShareListParams {
   page: number
   size: number
-  /** 0=正常，1=已撤销 */
-  status?: 0 | 1
+  /** 0=正常（不含已过期），1=已撤销，2=已过期（含刚过期、定时任务还没扫到的行） */
+  status?: 0 | 1 | 2
   /** 用户名关键词（后端 ILIKE 模糊匹配） */
   ownerKeyword?: string
   /** token 前缀（后端前缀匹配） */

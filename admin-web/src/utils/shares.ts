@@ -1,4 +1,4 @@
-import type { AdminShareItem } from '../types'
+import type { AdminShareItem, ShareStatus } from '../types'
 
 /**
  * 分享治理页的纯函数（task-91）：状态判定、筛选参数清洗、文案。
@@ -15,7 +15,7 @@ export const SHARE_PAGE_SIZE_DEFAULT = 20
 export type ShareRowState = 'normal' | 'revoked' | 'expired'
 
 export interface ShareFilters {
-  status?: 0 | 1
+  status?: ShareStatus
   ownerKeyword?: string
   tokenPrefix?: string
 }
@@ -23,7 +23,7 @@ export interface ShareFilters {
 export interface ShareQuery {
   page: number
   size: number
-  status?: 0 | 1
+  status?: ShareStatus
   ownerKeyword?: string
   tokenPrefix?: string
 }
@@ -44,7 +44,8 @@ export function tokenPrefix(token: string | null | undefined, len = TOKEN_PREFIX
 /**
  * 行状态：
  * - status=1 → 已撤销（后端权威状态）
- * - status=0 且 expiresAt < now → 已过期（前端按时间算，后端不落库）
+ * - status=2 → 已过期（后端定时任务落库的权威状态）
+ * - status=0 且 expiresAt < now → 已过期（还没被定时任务扫到，前端按时间兜底）
  * - 其余 → 正常
  */
 export function shareStateOf(
@@ -52,6 +53,7 @@ export function shareStateOf(
   now: number = Date.now()
 ): ShareRowState {
   if (item.status === 1) return 'revoked'
+  if (item.status === 2) return 'expired'
   if (item.expiresAt != null && item.expiresAt < now) return 'expired'
   return 'normal'
 }
@@ -73,7 +75,7 @@ export function buildShareParams(filters: ShareFilters, page: number, size: numb
   const cleanPage = Math.max(1, Math.floor(Number(page) || 1))
   const cleanSize = Math.min(SHARE_PAGE_SIZE_MAX, Math.max(1, Math.floor(Number(size) || SHARE_PAGE_SIZE_DEFAULT)))
   const query: ShareQuery = { page: cleanPage, size: cleanSize }
-  if (filters.status === 0 || filters.status === 1) query.status = filters.status
+  if (filters.status === 0 || filters.status === 1 || filters.status === 2) query.status = filters.status
   const owner = (filters.ownerKeyword || '').trim()
   if (owner) query.ownerKeyword = owner
   const prefix = (filters.tokenPrefix || '').trim()
@@ -86,6 +88,7 @@ export function hasShareFilters(filters: ShareFilters): boolean {
   return (
     filters.status === 0 ||
     filters.status === 1 ||
+    filters.status === 2 ||
     (filters.ownerKeyword || '').trim() !== '' ||
     (filters.tokenPrefix || '').trim() !== ''
   )

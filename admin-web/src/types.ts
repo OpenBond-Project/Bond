@@ -93,6 +93,8 @@ export interface WorkspaceItem {
   name: string
   description: string | null
   ownerId: SnowflakeId
+  /** 所属用户的用户名（后端批量补齐；用户已删除时为 null） */
+  ownerUsername?: string | null
   maxSize: number
   usedSize: number
   /** 列表接口当前返回 null（聚合未填充），详情接口才有 */
@@ -107,6 +109,8 @@ export interface WorkspaceDetail {
   name: string
   description: string | null
   ownerId: SnowflakeId | null
+  /** 所属用户的用户名（用户已删除时为 null） */
+  ownerUsername?: string | null
   maxSize: number
   usedSize: number
   memberCount: number
@@ -439,8 +443,13 @@ export interface SoftwareRelease {
   createdAt: string
 }
 
-/** 分享链接状态：0=正常，1=已撤销（已过期是前端按 expiresAt 算出来的，不是后端状态） */
-export type ShareStatus = 0 | 1
+/**
+ * 分享链接状态：0=正常，1=已撤销，2=已过期。
+ *
+ * <p>2 由后端定时任务（ExpiryCleanupService → markExpired）落库；还没被扫到的过期链接
+ * status 仍是 0，前端按 expiresAt 兜底显示为「已过期」。</p>
+ */
+export type ShareStatus = 0 | 1 | 2
 
 /**
  * GET /api/admin/shares 的列表项（task-91，字段按 2026-10-24 生产实测）
