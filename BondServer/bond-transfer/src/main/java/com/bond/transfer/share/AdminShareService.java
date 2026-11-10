@@ -40,6 +40,13 @@ public class AdminShareService {
     private final ConfigService configService;
     private final AuditService auditService;
 
+    /**
+     * 管理端分享链接分页列表。
+     *
+     * @param status 状态筛选：{@code 0}=正常（不含已过期）、{@code 1}=已撤销、
+     *               {@code 2}=已过期（含 status 仍为 0 但 expires_at 已过的行，
+     *               避免「刚过期、定时任务还没扫到」时查不到）；{@code null}=全部
+     */
     public PageResult<AdminShareDTO> list(int page, int size, Integer status,
                                           String ownerKeyword, String tokenPrefix) {
         int safePage = Math.max(page, 1);

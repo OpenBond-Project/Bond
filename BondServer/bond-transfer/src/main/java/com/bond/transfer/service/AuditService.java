@@ -54,8 +54,15 @@ public class AuditService {
         }
     }
 
+    /**
+     * 分页查询审计日志。
+     *
+     * @param actorId      按操作人 ID 精确过滤
+     * @param actorKeyword 按操作人模糊过滤：匹配 {@code actor_name}（写入时的昵称/用户名快照）
+     *                     或 {@code actor_id} 的文本片段，方便直接拿用户名查
+     */
     public PageResult<AuditLogDTO> list(int page, int size, String action, Long actorId,
-                                        OffsetDateTime from, OffsetDateTime to) {
+                                        String actorKeyword, OffsetDateTime from, OffsetDateTime to) {
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         LambdaQueryWrapper<AuditLog> wrapper = new LambdaQueryWrapper<>();
@@ -65,6 +72,7 @@ public class AuditService {
         if (actorId != null) {
             wrapper.eq(AuditLog::getActorId, actorId);
         }
+        applyActorKeyword(wrapper, actorKeyword);
         if (from != null) {
             wrapper.ge(AuditLog::getCreatedAt, from);
         }
@@ -74,12 +82,23 @@ public class AuditService {
         wrapper.orderByDesc(AuditLog::getCreatedAt)
                 .last("LIMIT " + safeSize + " OFFSET " + (long) (safePage - 1) * safeSize);
         List<AuditLog> rows = auditLogMapper.selectList(wrapper);
-        long total = count(action, actorId, from, to);
+        long total = count(action, actorId, actorKeyword, from, to);
         List<AuditLogDTO> items = rows.stream().map(AuditService::toDto).toList();
         return PageResult.of(items, total, safePage, safeSize);
     }
 
-    private long count(String action, Long actorId, OffsetDateTime from, OffsetDateTime to) {
+    /** 操作人模糊匹配：actor_name ILIKE %kw% 或 actor_id 文本包含 kw（用户名/昵称/ID 片段都能查）。 */
+    private static void applyActorKeyword(LambdaQueryWrapper<AuditLog> wrapper, String actorKeyword) {
+        if (actorKeyword == null || actorKeyword.isBlank()) {
+            return;
+        }
+        String kw = actorKeyword.trim();
+        wrapper.and(w -> w.like(AuditLog::getActorName, kw)
+                .or().apply("CAST(actor_id AS TEXT) LIKE {0}", "%" + kw + "%"));
+    }
+
+    private long count(String action, Long actorId, String actorKeyword,
+                       OffsetDateTime from, OffsetDateTime to) {
         LambdaQueryWrapper<AuditLog> wrapper = new LambdaQueryWrapper<>();
         if (action != null && !action.isBlank()) {
             wrapper.eq(AuditLog::getAction, action.trim());
@@ -87,6 +106,7 @@ public class AuditService {
         if (actorId != null) {
             wrapper.eq(AuditLog::getActorId, actorId);
         }
+        applyActorKeyword(wrapper, actorKeyword);
         if (from != null) {
             wrapper.ge(AuditLog::getCreatedAt, from);
         }

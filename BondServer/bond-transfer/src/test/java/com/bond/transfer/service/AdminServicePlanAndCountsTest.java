@@ -84,7 +84,7 @@ class AdminServicePlanAndCountsTest {
         when(planCatalog.name("plus")).thenReturn("Plus");
         when(planCatalog.name("free")).thenReturn("Free");
 
-        List<AdminUserDTO> users = adminService.listUsers(1, 20, null);
+        List<AdminUserDTO> users = adminService.listUsers(1, 20, null, null);
 
         assertEquals("plus", users.get(0).getPlanCode());
         assertEquals("Plus", users.get(0).getPlanName());

@@ -117,8 +117,9 @@ public class AdminController {
     public Result<List<AdminUserDTO>> listUsers(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String keyword) {
-        return Result.ok(adminService.listUsers(page, size, keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer status) {
+        return Result.ok(adminService.listUsers(page, size, keyword, status));
     }
 
     @AdminAudit(action = "user.status.set", targetType = "user")
@@ -261,9 +262,11 @@ public class AdminController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) Long actorId,
+            @RequestParam(required = false) String actorKeyword,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
-        return Result.ok(auditService.list(page, size, action, actorId, parseTime(from), parseTime(to)));
+        return Result.ok(auditService.list(page, size, action, actorId, actorKeyword,
+                parseTime(from), parseTime(to)));
     }
 
     @GetMapping("/audit-actions")
