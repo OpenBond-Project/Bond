@@ -70,13 +70,35 @@ public class AdminService {
         return trend;
     }
 
-    public List<AdminUserDTO> listUsers(int page, int size, String keyword) {
+    /**
+     * 管理端用户列表。
+     *
+     * @param keyword 用户名 / 昵称模糊匹配；纯数字时额外按用户 ID 文本匹配
+     * @param status  账号状态过滤：{@code 1}=正常、{@code 0}=已禁用；{@code null}=全部
+     */
+    public List<AdminUserDTO> listUsers(int page, int size, String keyword, Integer status) {
+        // page/size 兜底：page=0 会算出负 OFFSET，PostgreSQL 报错后被兜成 409
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        if (status != null) {
+            wrapper.eq(User::getStatus, status);
+        }
         if (keyword != null && !keyword.isEmpty()) {
-            wrapper.and(w -> w.like(User::getUsername, keyword).or().like(User::getNickname, keyword));
+            String kw = keyword.trim();
+            if (!kw.isEmpty()) {
+                wrapper.and(w -> {
+                    w.like(User::getUsername, kw).or().like(User::getNickname, kw);
+                    // 用户 ID 是雪花 Long（18~19 位），后台经常直接拿 ID 查人：
+                    // 纯数字关键词再按 id 的文本做模糊匹配，整串、前缀、片段都能命中。
+                    if (kw.chars().allMatch(Character::isDigit)) {
+                        w.or().apply("CAST(id AS TEXT) LIKE {0}", "%" + kw + "%");
+                    }
+                });
+            }
         }
         wrapper.orderByDesc(User::getCreatedAt);
-        wrapper.last("LIMIT " + size + " OFFSET " + (page - 1) * size);
+        wrapper.last("LIMIT " + safeSize + " OFFSET " + (long) (safePage - 1) * safeSize);
 
         return userMapper.selectList(wrapper).stream().map(u -> {
             AdminUserDTO dto = new AdminUserDTO();
@@ -151,10 +173,14 @@ public class AdminService {
     }
 
     public List<TransferTaskDTO> listTransfers(int page, int size, Integer status) {
+        // page/size 兜底：page=0 会算出负 OFFSET（LIMIT 50 OFFSET -50），
+        // PostgreSQL 直接报错并被 GlobalExceptionHandler 兜成 409「数据冲突」。
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
         LambdaQueryWrapper<TransferTask> wrapper = new LambdaQueryWrapper<>();
         if (status != null) wrapper.eq(TransferTask::getStatus, status);
         wrapper.orderByDesc(TransferTask::getCreatedAt);
-        wrapper.last("LIMIT " + size + " OFFSET " + (page - 1) * size);
+        wrapper.last("LIMIT " + safeSize + " OFFSET " + (long) (safePage - 1) * safeSize);
 
         return transferTaskMapper.selectList(wrapper).stream().map(t -> {
             TransferTaskDTO dto = new TransferTaskDTO();
@@ -199,9 +225,12 @@ public class AdminService {
     }
 
     public List<WorkspaceDTO> listWorkspaces(int page, int size) {
+        // page/size 兜底：page=0 会算出负 OFFSET，PostgreSQL 报错后被兜成 409
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
         LambdaQueryWrapper<Workspace> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(Workspace::getCreatedAt);
-        wrapper.last("LIMIT " + size + " OFFSET " + (page - 1) * size);
+        wrapper.last("LIMIT " + safeSize + " OFFSET " + (long) (safePage - 1) * safeSize);
 
         List<Workspace> workspaces = workspaceMapper.selectList(wrapper);
         List<Long> ids = workspaces.stream().map(Workspace::getId).collect(Collectors.toList());
@@ -210,6 +239,16 @@ public class AdminService {
                 : countMap(workspaceMemberMapper.countByWorkspaceIds(ids), "member_count");
         Map<Long, Long> fileCounts = ids.isEmpty() ? Map.of()
                 : countMap(workspaceFileMapper.countActiveFilesByWorkspaceIds(ids), "file_count");
+        // 所属用户用户名：当前页 ownerId 去重后一次批量查（同样不逐行查库）
+        List<Long> ownerIds = workspaces.stream()
+                .map(Workspace::getOwnerId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> ownerNames = ownerIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(ownerIds).stream()
+                        .collect(Collectors.toMap(User::getId,
+                                u -> u.getUsername() == null ? "" : u.getUsername(), (a, b) -> a));
 
         return workspaces.stream().map(w -> {
             WorkspaceDTO dto = new WorkspaceDTO();
@@ -217,6 +256,7 @@ public class AdminService {
             dto.setName(w.getName());
             dto.setDescription(w.getDescription());
             dto.setOwnerId(w.getOwnerId());
+            dto.setOwnerUsername(w.getOwnerId() == null ? null : ownerNames.get(w.getOwnerId()));
             dto.setMaxSize(w.getMaxSize());
             dto.setUsedSize(w.getUsedSize());
             dto.setMemberCount(memberCounts.getOrDefault(w.getId(), 0L));
@@ -324,6 +364,9 @@ public class AdminService {
         detail.put("name", ws.getName());
         detail.put("description", ws.getDescription());
         detail.put("ownerId", ws.getOwnerId() == null ? null : String.valueOf(ws.getOwnerId()));
+        // 所属用户用户名（用户已删除时为 null），管理端详情直接展示，不用再拿 ID 去别处查
+        User owner = ws.getOwnerId() == null ? null : userMapper.selectById(ws.getOwnerId());
+        detail.put("ownerUsername", owner == null ? null : owner.getUsername());
         detail.put("maxSize", ws.getMaxSize());
         detail.put("usedSize", ws.getUsedSize());
         detail.put("memberCount", workspaceMemberMapper.selectCount(

@@ -215,12 +215,17 @@ function selectStatus(value: number | null) {
 }
 
 function onPageChange(p: number) {
-  page.value = p
+  // 列表为空时 ant-design-vue 会把 current 夹成 0 再抛 change(0, size)，
+  // 直接透传会让后端收到 page=0（负 OFFSET → 409「数据冲突」），这里兜到 1。
+  page.value = Math.max(1, Math.floor(Number(p) || 1))
   load()
 }
 
 function onSizeChange(_p: number, size: number) {
-  pageSize.value = size
+  // pageSizeOptions 是字符串数组，ant-design-vue 会把选中的值以字符串回传；
+  // 直接赋给 pageSize 会让 :page-size 收到 string（Vue 报 prop 类型错误），
+  // 这里统一转成数字，非法值保持原值。
+  pageSize.value = Number(size) || pageSize.value
   page.value = 1
   load()
 }

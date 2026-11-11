@@ -47,7 +47,16 @@ function notifyForbidden(err: unknown) {
 }
 
 http.interceptors.response.use(
-  (res) => res.data,
+  (res) => {
+    // 204 / 空响应体（DELETE 类接口）统一成 { code: 200, message: 'success', data: null }。
+    // 后端删除接口返回 204 No Content，axios 的 res.data 是空字符串，
+    // 调用方拿到的 res.code 就是 undefined，会把「删除成功」判成失败
+    // （软件分发删版本、删包、撤销分享都踩过这个坑）。
+    if (res.status === 204 || res.data === '' || res.data == null) {
+      return { code: 200, message: 'success', data: null }
+    }
+    return res.data
+  },
   (err) => {
     if (err.response?.status === 401) {
       const auth = useAuthStore()
@@ -112,7 +121,7 @@ export const adminApi = {
   transferStats: () => get<TransferStats>('/admin/transfers/stats'),
 
   // ── 用户 ──
-  listUsers: (params: { page: number; size: number; keyword?: string }) =>
+  listUsers: (params: { page: number; size: number; keyword?: string; status?: number }) =>
     get<AdminUser[]>('/admin/users', params),
   getUserDetail: (id: string) => get<AdminUser>(`/admin/users/${id}`),
   setUserStatus: (id: string, status: number) => put<void>(`/admin/users/${id}/status`, { status }),
@@ -159,6 +168,8 @@ export const adminApi = {
     size: number
     action?: string
     actorId?: string
+    /** 操作人模糊匹配（actor_name ILIKE / actor_id 文本包含），后端部署后生效 */
+    actorKeyword?: string
     from?: string
     to?: string
   }) => get<PageResult<AuditLog>>('/admin/audit-logs', params),

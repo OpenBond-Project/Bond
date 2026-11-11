@@ -12,6 +12,8 @@ public class WorkspaceDTO {
     private String description;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long ownerId;
+    /** 所属用户的用户名（管理端列表/详情展示用；用户已删除时为 null）。 */
+    private String ownerUsername;
     private Long maxSize;
     private Long usedSize;
     /** 成员数（含 owner）；列表/详情由聚合查询一次填充，避免 N+1。 */

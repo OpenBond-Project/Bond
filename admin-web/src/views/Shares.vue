@@ -204,7 +204,8 @@ const tokenInput = ref('')
 
 const statusOptions = [
   { label: '正常', value: 0 },
-  { label: '已撤销', value: 1 }
+  { label: '已撤销', value: 1 },
+  { label: '已过期', value: 2 }
 ]
 
 const columns = [

@@ -63,7 +63,8 @@
           </template>
 
           <template v-else-if="column.key === 'ownerId'">
-            <span class="mono">{{ record.ownerId }}</span>
+            <div class="cell-main">{{ record.ownerUsername || '—' }}</div>
+            <div class="cell-sub mono">{{ record.ownerId }}</div>
           </template>
 
           <template v-else-if="column.key === 'counts'">
@@ -138,7 +139,10 @@
             <a-descriptions-item label="工作区 ID"><span class="mono">{{ detail.id }}</span></a-descriptions-item>
             <a-descriptions-item label="名称">{{ detail.name }}</a-descriptions-item>
             <a-descriptions-item label="描述">{{ detail.description || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="Owner ID"><span class="mono">{{ detail.ownerId || '—' }}</span></a-descriptions-item>
+            <a-descriptions-item label="所属用户">
+              <span>{{ detail.ownerUsername || '—' }}</span>
+              <span class="mono muted small" style="margin-left: 8px">{{ detail.ownerId || '' }}</span>
+            </a-descriptions-item>
             <a-descriptions-item label="成员数">{{ detail.memberCount }}</a-descriptions-item>
             <a-descriptions-item label="文件数">{{ detail.fileCount }}</a-descriptions-item>
             <a-descriptions-item label="容量">
@@ -191,7 +195,7 @@ const detailError = ref('')
 
 const columns = [
   { title: '工作区', key: 'name', width: 300 },
-  { title: 'Owner ID', key: 'ownerId', width: 170 },
+  { title: '所属用户', key: 'ownerId', width: 190 },
   { title: '成员 / 文件', key: 'counts', width: 150 },
   { title: '容量', key: 'usage', width: 220 },
   { title: '创建时间', key: 'createdAt', width: 160 },
@@ -202,7 +206,10 @@ const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return items.value
   return items.value.filter(
-    (w) => w.name?.toLowerCase().includes(kw) || String(w.ownerId).includes(kw)
+    (w) =>
+      w.name?.toLowerCase().includes(kw) ||
+      String(w.ownerId).includes(kw) ||
+      (w.ownerUsername || '').toLowerCase().includes(kw)
   )
 })
 

@@ -84,7 +84,15 @@ public interface ShareLinkMapper extends BaseMapper<ShareLink> {
             "  LEFT JOIN users u ON u.id = l.creator_id",
             "  LEFT JOIN workspace_files f ON f.id = l.file_id",
             " WHERE 1 = 1",
-            "<if test=\"status != null\"> AND l.status = #{status} </if>",
+            // status 语义：0=正常（排除已过期但还没被定时任务扫到的行）、1=已撤销、
+            // 2=已过期（含 status 仍为 0 但 expires_at 已过的行，避免「刚过期查不到」）
+            "<if test=\"status != null\">",
+            "  <choose>",
+            "    <when test=\"status == 0\"> AND l.status = 0 AND (l.expires_at IS NULL OR l.expires_at &gt;= now()) </when>",
+            "    <when test=\"status == 2\"> AND (l.status = 2 OR (l.status = 0 AND l.expires_at IS NOT NULL AND l.expires_at &lt; now())) </when>",
+            "    <otherwise> AND l.status = #{status} </otherwise>",
+            "  </choose>",
+            "</if>",
             "<if test=\"ownerKeyword != null and ownerKeyword != ''\"> AND u.username ILIKE concat('%', #{ownerKeyword}, '%') </if>",
             "<if test=\"tokenPrefix != null and tokenPrefix != ''\"> AND l.token LIKE concat(#{tokenPrefix}, '%') </if>",
             " ORDER BY l.created_at DESC, l.id DESC",
@@ -96,12 +104,18 @@ public interface ShareLinkMapper extends BaseMapper<ShareLink> {
                                         @Param("limit") int limit,
                                         @Param("offset") long offset);
 
-    /** 管理端列表的独立 count（与 {@link #selectAdminPage} 同条件）。 */
+    /** 管理端列表的独立 count（与 {@link #selectAdminPage} 同条件，status 语义也一致）。 */
     @Select({"<script>",
             "SELECT COUNT(*) FROM share_links l",
             "  LEFT JOIN users u ON u.id = l.creator_id",
             " WHERE 1 = 1",
-            "<if test=\"status != null\"> AND l.status = #{status} </if>",
+            "<if test=\"status != null\">",
+            "  <choose>",
+            "    <when test=\"status == 0\"> AND l.status = 0 AND (l.expires_at IS NULL OR l.expires_at &gt;= now()) </when>",
+            "    <when test=\"status == 2\"> AND (l.status = 2 OR (l.status = 0 AND l.expires_at IS NOT NULL AND l.expires_at &lt; now())) </when>",
+            "    <otherwise> AND l.status = #{status} </otherwise>",
+            "  </choose>",
+            "</if>",
             "<if test=\"ownerKeyword != null and ownerKeyword != ''\"> AND u.username ILIKE concat('%', #{ownerKeyword}, '%') </if>",
             "<if test=\"tokenPrefix != null and tokenPrefix != ''\"> AND l.token LIKE concat(#{tokenPrefix}, '%') </if>",
             "</script>"})

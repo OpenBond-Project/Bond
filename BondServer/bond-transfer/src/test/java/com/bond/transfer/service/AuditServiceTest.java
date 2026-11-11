@@ -92,7 +92,7 @@ class AuditServiceTest {
         when(auditLogMapper.selectList(any())).thenReturn(List.of(log(1L)));
         when(auditLogMapper.selectCount(any())).thenReturn(2L);
 
-        PageResult<AuditLogDTO> page = auditService.list(0, 999, "user.delete", ACTOR_ID,
+        PageResult<AuditLogDTO> page = auditService.list(0, 999, "user.delete", ACTOR_ID, null,
                 OffsetDateTime.now().minusDays(1), OffsetDateTime.now());
 
         assertEquals(1, page.getPage());
@@ -108,7 +108,7 @@ class AuditServiceTest {
         when(auditLogMapper.selectList(any())).thenReturn(List.of());
         when(auditLogMapper.selectCount(any())).thenReturn(0L);
 
-        PageResult<AuditLogDTO> page = auditService.list(-3, 0, null, null, null, null);
+        PageResult<AuditLogDTO> page = auditService.list(-3, 0, null, null, null, null, null);
 
         assertEquals(1, page.getPage());
         assertEquals(1, page.getSize());

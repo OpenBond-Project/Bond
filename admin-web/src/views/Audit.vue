@@ -43,7 +43,7 @@
         :options="actionOptions"
         @change="applyFilters"
       />
-      <a-input v-model:value="actorFilter" placeholder="操作人 ID（雪花 ID）" allow-clear style="width: 200px" @press-enter="applyFilters" />
+      <a-input v-model:value="actorFilter" placeholder="操作人用户名 / 昵称 / ID" allow-clear style="width: 220px" @press-enter="applyFilters" />
       <a-range-picker
         v-model:value="timeRange"
         show-time
@@ -192,14 +192,48 @@ async function loadActions() {
   }
 }
 
+/**
+ * 用户名/昵称 → 用户 ID。
+ *
+ * <p>线上后端的审计接口只支持 {@code actorId} 精确过滤，所以这里先用用户列表接口把名字解析成 ID；
+ * 解析不到（用户已删除 / 名字不存在）返回 undefined，由调用方退化为 {@code actorKeyword}。</p>
+ */
+async function resolveActorId(keyword: string): Promise<string | undefined> {
+  try {
+    const res = await adminApi.listUsers({ page: 1, size: 20, keyword })
+    if (res.code !== 200 || !Array.isArray(res.data) || res.data.length === 0) return undefined
+    const lower = keyword.toLowerCase()
+    const exact = res.data.find(
+      (u) => u.username?.toLowerCase() === lower || u.nickname?.toLowerCase() === lower
+    )
+    return (exact ?? res.data[0])?.id
+  } catch {
+    return undefined
+  }
+}
+
 async function load() {
   loading.value = true
   try {
+    // 操作人筛选：纯数字按 ID 精确查；用户名/昵称先解析成用户 ID（线上后端只支持 actorId），
+    // 解析不到再退化为 actorKeyword（后端部署后支持按 actor_name 模糊匹配）。
+    const actorInput = actorFilter.value.trim()
+    let actorId: string | undefined
+    let actorKeyword: string | undefined
+    if (actorInput) {
+      if (/^\d+$/.test(actorInput)) {
+        actorId = actorInput
+      } else {
+        actorId = await resolveActorId(actorInput)
+        if (!actorId) actorKeyword = actorInput
+      }
+    }
     const res = await adminApi.listAuditLogs({
       page: page.value,
       size: pageSize.value,
       action: actionFilter.value || undefined,
-      actorId: actorFilter.value.trim() || undefined,
+      actorId,
+      actorKeyword,
       from: toIso(Array.isArray(timeRange.value) ? timeRange.value[0] : undefined),
       to: toIso(Array.isArray(timeRange.value) ? timeRange.value[1] : undefined)
     })
