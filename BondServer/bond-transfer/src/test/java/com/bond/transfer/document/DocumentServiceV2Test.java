@@ -16,6 +16,10 @@ import com.bond.transfer.mapper.WorkspaceMapper;
 import com.bond.transfer.service.ConfigService;
 import com.bond.transfer.service.PersonalSpaceService;
 import com.bond.transfer.service.WorkspaceService;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +48,11 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceV2Test {
+
+    @BeforeAll
+    static void initMybatisPlusLambdaCache() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), Document.class);
+    }
 
     private static final Long USER_ID = 7L;
     private static final Long WORKSPACE_ID = 10L;
