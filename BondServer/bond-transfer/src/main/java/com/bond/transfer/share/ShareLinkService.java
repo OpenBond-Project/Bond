@@ -86,6 +86,14 @@ public class ShareLinkService {
     /** task-102：永久链接缺省下载次数（之后仍按档位 share_max_downloads 收敛）。 */
     private static final int DEFAULT_PERMANENT_MAX_DOWNLOADS = 100;
 
+    /**
+     * 已撤销链接在「我的分享」列表中的保留天数。
+     *
+     * <p>撤销后仍保留 7 天供用户确认/审计，超过 7 天不再返回给创建者；
+     * 数据库行不删除（管理端审计仍可见）。</p>
+     */
+    private static final int REVOKED_VISIBLE_DAYS = 7;
+
     // ── task-183 文件夹分享（ZIP） ──
     /** 文件夹分享落地页最多展示的首层条目数（超出提示「下载 ZIP 查看全部」）。 */
     static final int MAX_LANDING_ITEMS = 200;
@@ -206,6 +214,13 @@ public class ShareLinkService {
                 .eq(ShareLink::getCreatorId, userId)
                 .eq(workspaceId != null, ShareLink::getWorkspaceId, workspaceId)
                 .orderByDesc(ShareLink::getCreatedAt));
+        // 撤销超过 7 天的链接不再出现在「我的分享」；行保留给管理端审计。
+        OffsetDateTime revokedCutoff = OffsetDateTime.now().minusDays(REVOKED_VISIBLE_DAYS);
+        links = links.stream()
+                .filter(link -> !isRevoked(link)
+                        || link.getUpdatedAt() == null
+                        || !link.getUpdatedAt().isBefore(revokedCutoff))
+                .toList();
         if (workspaceId != null) {
             links = links.stream()
                     .filter(link -> workspaceId.equals(link.getWorkspaceId()))
@@ -1107,6 +1122,11 @@ public class ShareLinkService {
                 link.getCreatedAt() == null ? null : link.getCreatedAt().toInstant().toEpochMilli(),
                 link.getExpiresAt() == null ? null : link.getExpiresAt().toInstant().toEpochMilli(),
                 file == null ? null : directory);
+    }
+
+    /** 撤销状态位（status=1）；过期是时间判定，不在这里处理。 */
+    private static boolean isRevoked(ShareLink link) {
+        return link.getStatus() != null && link.getStatus() == 1;
     }
 
     /** 派生状态（task-163）：revoked / expired / active；过期以时间判定为准。 */

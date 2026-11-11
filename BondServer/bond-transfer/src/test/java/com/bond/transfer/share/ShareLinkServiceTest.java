@@ -446,6 +446,35 @@ class ShareLinkServiceTest {
     }
 
     @Test
+    @DisplayName("列表：撤销超过 7 天的链接不再返回，7 天内仍可见")
+    void listHidesRevokedOlderThanSevenDays() {
+        ShareLink recent = baseLink();
+        recent.setStatus(1);
+        recent.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        ShareLink old = baseLink();
+        old.setId(2L);
+        old.setToken(ShareCode.newToken());
+        old.setStatus(1);
+        old.setUpdatedAt(OffsetDateTime.now().minusDays(8));
+
+        ShareLink active = baseLink();
+        active.setId(3L);
+        active.setToken(ShareCode.newToken());
+        active.setStatus(0);
+
+        when(shareLinkMapper.selectList(any())).thenReturn(List.of(recent, old, active));
+        when(workspaceFileMapper.selectBatchIds(any())).thenReturn(List.of(file()));
+
+        List<ShareLinkView> views = service.list(USER_ID);
+
+        assertEquals(2, views.size());
+        assertTrue(views.stream().noneMatch(view -> view.id().equals(2L)));
+        assertTrue(views.stream().anyMatch(view -> view.id().equals(1L)));
+        assertTrue(views.stream().anyMatch(view -> view.id().equals(3L)));
+    }
+
+    @Test
     @DisplayName("列表：workspaceId 过滤生效（避免控制器收下参数却静默忽略）")
     void listFiltersByWorkspaceId() {
         ShareLink personal = baseLink();
