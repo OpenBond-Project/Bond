@@ -206,7 +206,7 @@ async function resolveActorId(keyword: string): Promise<string | undefined> {
     const exact = res.data.find(
       (u) => u.username?.toLowerCase() === lower || u.nickname?.toLowerCase() === lower
     )
-    return (exact ?? res.data[0])?.id
+    return exact?.id
   } catch {
     return undefined
   }
@@ -323,3 +323,4 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 </style>
+
