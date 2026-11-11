@@ -37,24 +37,92 @@
     </Style>
 
     <!--
-        2026-11-09：SukiUI 的 ComboBox 模板默认在右侧画「上+下」双箭头
-        （Path Data="M7,15 L12,20 L17,15 M7,9 L12,4 L17,9"），
-        用户反馈所有下拉框都像有两个箭头。模板里的 Path 是局部值，普通 Style Setter
-        覆盖不了，所以直接替换 ToggleButton 的模板，只画一个下箭头。
+        2026-11-09：SukiUI 7.0.1 的 ComboBox 模板把箭头 ToggleButton 的
+        Padding="20,5,12,5"、Margin="10,0,0,0" 和文字 ContentControl 的
+        Margin="12,1,0,0" 写成模板局部值，普通 Style Setter 覆盖不了。
+        Grid 的 Auto 列按 desired width 54 预留，118 宽的 ComboBox 只剩
+        38.67 给文字，「全部类型」正好 38.67，边缘被裁。
+        这里直接替换整个 ComboBox 模板：箭头按钮收紧到 28px，
+        文字列拿回宽度；同时保留 36px 基线高度和垂直居中。
     -->
-    <Style Selector="ComboBox /template/ ToggleButton#toggle">
+    <Style Selector="ComboBox">
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="8,0,0,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="{DynamicResource BondSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BondBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Template">
             <ControlTemplate>
-                <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                    <Viewbox Width="12" Height="12">
-                        <Panel Width="24" Height="24">
-                            <Path Data="M7,9 L12,14 L17,9"
-                                  Stroke="{DynamicResource SukiLowText}"
-                                  StrokeThickness="2"
-                                  StrokeLineCap="Round"
-                                  StrokeJoin="Round" />
-                        </Panel>
-                    </Viewbox>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        ClipToBounds="True">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ContentControl Grid.Column="0"
+                                        Content="{TemplateBinding SelectionBoxItem}"
+                                        ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                        Margin="{TemplateBinding Padding}"
+                                        IsHitTestVisible="False" />
+                        <ToggleButton Grid.Column="0"
+                                      Name="toggleArea"
+                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                      Focusable="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Padding="0"
+                                      Margin="0"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch" />
+                        <ToggleButton Grid.Column="1"
+                                      Name="toggle"
+                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                      Focusable="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Padding="8,0"
+                                      Margin="0"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Stretch">
+                            <Viewbox Width="12" Height="12"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Center">
+                                <Panel Width="24" Height="24">
+                                    <Path Data="M7,9 L12,14 L17,9"
+                                          Stroke="{DynamicResource SukiLowText}"
+                                          StrokeThickness="2"
+                                          StrokeLineCap="Round"
+                                          StrokeJoin="Round" />
+                                </Panel>
+                            </Viewbox>
+                        </ToggleButton>
+                        <Popup Name="PART_Popup"
+                               Grid.ColumnSpan="2"
+                               IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                               PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                               Placement="Bottom"
+                               HorizontalOffset="0"
+                               VerticalOffset="4"
+                               IsLightDismissEnabled="True"
+                               MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                               MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                            <Border Background="{DynamicResource BondSurface}"
+                                    BorderBrush="{DynamicResource BondBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="4">
+                                <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ItemsPresenter Name="PART_ItemsPresenter"
+                                                    ItemsPanel="{TemplateBinding ItemsPanel}" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
                 </Border>
             </ControlTemplate>
         </Setter>

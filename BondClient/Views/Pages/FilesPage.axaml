@@ -243,7 +243,7 @@
                                    VerticalAlignment="Center" Margin="0,0,12,0" />
 
                         <!-- 类型筛选（按扩展名分组，持久化到 prefs.json） -->
-                        <ComboBox Grid.Column="3" Width="118" Height="30" MinHeight="30"
+                        <ComboBox Grid.Column="3" x:Name="TypeFilterCombo" Width="118" Height="30" MinHeight="30"
                                   ItemsSource="{Binding TypeFilterOptions}"
                                   SelectedItem="{Binding SelectedTypeFilter}"
                                   FontSize="11.5" VerticalContentAlignment="Center"

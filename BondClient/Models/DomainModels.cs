@@ -1629,6 +1629,12 @@ public sealed class ShareLink
         }
     }
 
+    /// <summary>
+    /// 列表「已过期」徽标是否显示。撤销优先于过期：已撤销的链接即使同时过期，
+    /// 也只显示「已撤销」，避免两个状态在同一列叠加。
+    /// </summary>
+    public bool ShowExpired => IsExpired && !IsRevoked;
+
     public string StatusText => IsRevoked ? "已撤销" : IsExpired ? "已过期" : "正常";
 
     /// <summary>状态徽标配色：正常=强调色、已撤销=危险色、已过期=次要色。</summary>

@@ -166,7 +166,7 @@
                                         <TextBlock Grid.Column="1" Text="已过期" FontSize="11"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource BondTextMuted}"
-                                                   IsVisible="{Binding IsExpired}" />
+                                                   IsVisible="{Binding ShowExpired}" />
                                         <TextBlock Grid.Column="1" Text="已撤销" FontSize="11"
                                                    VerticalAlignment="Center" Foreground="#C0392B"
                                                    IsVisible="{Binding IsRevoked}" />
